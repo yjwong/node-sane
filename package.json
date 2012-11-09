@@ -1,0 +1,22 @@
+{
+  "name": "sane",
+  "version": "0.0.1",
+  "author": "Wong Yong Jie <yjwong92@gmail.com>",
+  "description": "a node.js interface to SANE (Scanner Access Made Easy)",
+  "main": "./lib/sane",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yjwong/node-sane.git"
+  },
+  "keywords": [
+    "sane",
+    "scanner",
+    "access",
+    "made",
+    "easy"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=0.8"
+  }
+}

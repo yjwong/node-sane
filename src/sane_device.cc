@@ -14,14 +14,15 @@ Handle<Value>
 SaneDevice::New (const SANE_Device * device) {
 	SaneDevice * device_wrap = new SaneDevice (device);
 
-	Handle<ObjectTemplate> device_tpl = ObjectTemplate::New ();
-	device_tpl->SetInternalFieldCount (1);
-	device_tpl->SetAccessor (String::New ("name"), GetName);
-	device_tpl->SetAccessor (String::New ("vendor"), GetVendor);
-	device_tpl->SetAccessor (String::New ("model"), GetModel);
-	device_tpl->SetAccessor (String::New ("type"), GetType);
+	Handle<FunctionTemplate> func_tpl = FunctionTemplate::New ();
+	func_tpl->SetClassName (String::New ("SaneDevice"));
+	func_tpl->InstanceTemplate ()->SetInternalFieldCount (1);
+	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("name"), GetName);
+	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("vendor"), GetVendor);
+	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("model"), GetModel);
+	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("type"), GetType);
 
-	Handle<Object> object = device_tpl->NewInstance ();
+	Handle<Object> object = func_tpl->InstanceTemplate ()->NewInstance ();
 	object->SetInternalField (0, External::New (device_wrap));
 	return object;
 }

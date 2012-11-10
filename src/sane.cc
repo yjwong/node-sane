@@ -1,9 +1,13 @@
+#include <iostream>
+#include <string>
 #include <node.h>
 #include <node_buffer.h>
 #include <node_version.h>
 #include <sane/sane.h>
 #include <v8.h>
 #include "sane_device.h"
+#include "sane_handle.h"
+#include "sane_option_descriptor.h"
 
 using namespace v8;
 using namespace node;
@@ -18,13 +22,6 @@ Init (const Arguments& args) {
 
 	SANE_Status status;
 	status = sane_init (&version_code, NULL); // TODO: Set authorization callback.
-	/*
-	if (status != SANE_STATUS_GOOD) {
-		const SANE_String_Const status_str = sane_strstatus (status);
-		return ThrowException (Exception::Error (String::New (status_str)));
-	}
-	*/
-
 	return scope.Close (Number::New (status));
 }
 
@@ -107,10 +104,136 @@ GetDevices (const Arguments& args) {
 	return Undefined ();
 }
 
+struct OpenBaton {
+	uv_work_t request;
+	Persistent<Function> callback;
+	SANE_String_Const name;
+
+	// Resultant data
+	SANE_Handle handle;
+	SANE_Status status;
+};
+
+void OpenAsyncWork (uv_work_t* req) {
+	OpenBaton* baton = static_cast<OpenBaton*> (req->data);
+	std::cout << baton->name << std::endl;
+	baton->status = sane_open (baton->name, &baton->handle);
+	delete[] baton->name;
+}
+
+void OpenAsyncAfter (uv_work_t* req) {
+	HandleScope scope;
+	OpenBaton* baton = static_cast<OpenBaton*> (req->data);
+
+	if (baton->status == SANE_STATUS_GOOD) {
+		Handle<Value> handle = SaneHandle::New (baton->handle);
+		Handle<Value> argv[] = { handle };
+		baton->callback->Call (Context::GetCurrent ()->Global(),
+			1, argv);
+
+	} else {
+		Local<Number> status = Number::New (baton->status);
+		Handle<Value> argv[] = { status };
+		baton->callback->Call (Context::GetCurrent ()->Global (),
+			1, argv);
+	}
+
+	baton->callback.Dispose ();
+	delete[] baton;
+}
+
+Handle<Value>
+Open (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 2) {
+		return ThrowException (Exception::TypeError (String::New (
+			"Threre should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsFunction ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be a callback")));
+	}
+
+	if (!args[1]->IsString ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"Second argument must be a string")));
+	}
+
+	Local<Function> callback = Local<Function>::Cast (args[0]);
+	String::AsciiValue name (args[1]->ToString ());
+	char* name_str = new char[strlen (*name)];
+	strcpy (name_str, *name);
+
+	OpenBaton* baton = new OpenBaton ();
+	baton->request.data = baton;
+	baton->callback = Persistent<Function>::New (callback);
+	baton->name = name_str;
+
+	uv_queue_work (uv_default_loop (), &baton->request,
+		OpenAsyncWork, OpenAsyncAfter);
+
+	return Undefined ();
+}
+
+Handle<Value>
+GetOptionDescriptor (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 2) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 2 arguments")));
+	}
+
+	if (!args[0]->IsObject ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an object")));
+	}
+
+	if (!args[1]->IsInt32 ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"Second argument must be an integer")));
+	}
+
+	Local<Object> handle = args[0]->ToObject ();
+	void* ptr = External::Unwrap (handle->GetInternalField (0));
+	Local<Integer> n = args[1]->ToInteger ();
+	
+	const SANE_Option_Descriptor * option = sane_get_option_descriptor (
+		ptr, n->Value ());
+	
+	return scope.Close (SaneOptionDescriptor::New (option));
+}
+
+Handle<Value>
+Close (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsObject ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an object")));
+	}
+
+	Local<Object> handle = args[0]->ToObject ();
+	void* ptr = External::Unwrap (handle->GetInternalField (0));
+	
+	sane_close (ptr);
+	return scope.Close (Undefined ());
+}
+
 void init (Handle<Object> target) {
 	NODE_SET_METHOD (target, "init", Init);
 	NODE_SET_METHOD (target, "exit", Exit);
 	NODE_SET_METHOD (target, "getDevices", GetDevices);
+	NODE_SET_METHOD (target, "open", Open);
+	NODE_SET_METHOD (target, "close", Close);
+	NODE_SET_METHOD (target, "getOptionDescriptor", GetOptionDescriptor);
 }
 
 NODE_MODULE (sane, init)

@@ -116,7 +116,6 @@ struct OpenBaton {
 
 void OpenAsyncWork (uv_work_t* req) {
 	OpenBaton* baton = static_cast<OpenBaton*> (req->data);
-	std::cout << baton->name << std::endl;
 	baton->status = sane_open (baton->name, &baton->handle);
 	delete[] baton->name;
 }
@@ -178,6 +177,27 @@ Open (const Arguments& args) {
 }
 
 Handle<Value>
+Close (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsObject ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an object")));
+	}
+
+	Local<Object> handle = args[0]->ToObject ();
+	void* ptr = External::Unwrap (handle->GetInternalField (0));
+	
+	sane_close (ptr);
+	return scope.Close (Undefined ());
+}
+
+Handle<Value>
 GetOptionDescriptor (const Arguments& args) {
 	HandleScope scope;
 
@@ -202,17 +222,21 @@ GetOptionDescriptor (const Arguments& args) {
 	
 	const SANE_Option_Descriptor * option = sane_get_option_descriptor (
 		ptr, n->Value ());
+	if (option == NULL) {
+		return scope.Close (Undefined ());
+	}
 	
 	return scope.Close (SaneOptionDescriptor::New (option));
 }
 
+
 Handle<Value>
-Close (const Arguments& args) {
+ControlOption (const Arguments& args) {
 	HandleScope scope;
 
-	if (args.Length () < 1) {
+	if (args.Length () < 4) {
 		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
+			"There should be exactly 5 arguments")));
 	}
 
 	if (!args[0]->IsObject ()) {
@@ -220,11 +244,32 @@ Close (const Arguments& args) {
 			"First argument must be an object")));
 	}
 
+	if (!args[1]->IsInt32 ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"Second argument must be an integer")));
+	}
+
+	if (!args[2]->IsInt32 ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"Third argument must be an integer")));
+	}
+
+	if (!Buffer::HasInstance(args[3])) {
+		return ThrowException (Exception::TypeError (String::New (
+			"Fourth argument must be a buffer")));
+	}
+
 	Local<Object> handle = args[0]->ToObject ();
 	void* ptr = External::Unwrap (handle->GetInternalField (0));
-	
-	sane_close (ptr);
-	return scope.Close (Undefined ());
+	Local<Integer> n = args[1]->ToInteger ();
+	Local<Integer> a = args[2]->ToInteger ();
+	char* v = Buffer::Data (args[3]->ToObject ());
+
+	SANE_Status status;
+	SANE_Int i;
+	status = sane_control_option (ptr, n->Value (), (SANE_Action) a->Value (), v, &i);
+
+	return scope.Close (Number::New (status));
 }
 
 void init (Handle<Object> target) {
@@ -234,6 +279,7 @@ void init (Handle<Object> target) {
 	NODE_SET_METHOD (target, "open", Open);
 	NODE_SET_METHOD (target, "close", Close);
 	NODE_SET_METHOD (target, "getOptionDescriptor", GetOptionDescriptor);
+	NODE_SET_METHOD (target, "controlOption", ControlOption);
 }
 
 NODE_MODULE (sane, init)

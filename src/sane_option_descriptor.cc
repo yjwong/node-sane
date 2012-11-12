@@ -35,7 +35,14 @@ SaneOptionDescriptor::New (const SANE_Option_Descriptor * descriptor) {
 Handle<Value>
 SaneOptionDescriptor::GetName (Local<String> property, const AccessorInfo& info) {
 	HandleScope scope;
-	return scope.Close (String::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->name));
+	const SANE_Option_Descriptor* descriptor = 
+		ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor;
+
+	if (descriptor->name == NULL) {
+		return scope.Close (Undefined ());
+	} else {
+		return scope.Close (String::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->name));
+	}
 }
 
 Handle<Value>

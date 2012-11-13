@@ -8,6 +8,7 @@
 #include "sane_device.h"
 #include "sane_handle.h"
 #include "sane_option_descriptor.h"
+#include "sane_parameters.h"
 
 using namespace v8;
 using namespace node;
@@ -125,7 +126,7 @@ void OpenAsyncAfter (uv_work_t* req) {
 	OpenBaton* baton = static_cast<OpenBaton*> (req->data);
 
 	if (baton->status == SANE_STATUS_GOOD) {
-		Handle<Value> handle = SaneHandle::New (baton->handle);
+		Handle<Value> handle = SaneHandle::Wrap (baton->handle);
 		Handle<Value> argv[] = { handle };
 		baton->callback->Call (Context::GetCurrent ()->Global(),
 			1, argv);
@@ -152,7 +153,7 @@ Open (const Arguments& args) {
 
 	if (!args[0]->IsFunction ()) {
 		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a callback")));
+			"First argument must be a callback function")));
 	}
 
 	if (!args[1]->IsString ()) {
@@ -191,7 +192,7 @@ Close (const Arguments& args) {
 	}
 
 	Local<Object> handle = args[0]->ToObject ();
-	void* ptr = External::Unwrap (handle->GetInternalField (0));
+	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
 	
 	sane_close (ptr);
 	return scope.Close (Undefined ());
@@ -217,7 +218,7 @@ GetOptionDescriptor (const Arguments& args) {
 	}
 
 	Local<Object> handle = args[0]->ToObject ();
-	void* ptr = External::Unwrap (handle->GetInternalField (0));
+	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
 	Local<Integer> n = args[1]->ToInteger ();
 	
 	const SANE_Option_Descriptor * option = sane_get_option_descriptor (
@@ -260,7 +261,7 @@ ControlOption (const Arguments& args) {
 	}
 
 	Local<Object> handle = args[0]->ToObject ();
-	void* ptr = External::Unwrap (handle->GetInternalField (0));
+	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
 	Local<Integer> n = args[1]->ToInteger ();
 	Local<Integer> a = args[2]->ToInteger ();
 	char* v = Buffer::Data (args[3]->ToObject ());
@@ -272,7 +273,37 @@ ControlOption (const Arguments& args) {
 	return scope.Close (Number::New (status));
 }
 
-void init (Handle<Object> target) {
+Handle<Value>
+GetParameters (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 2 arguments")));
+	}
+
+	if (!args[0]->IsObject ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an object")));
+	}
+
+	Local<Object> handle = args[0]->ToObject ();
+	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
+	SANE_Parameters * parameters = new SANE_Parameters ();
+
+	SANE_Status status;
+	status = sane_get_parameters (ptr, parameters);
+	if (status == SANE_STATUS_GOOD) {
+		return scope.Close (SaneParameters::Wrap (parameters));
+	} else {
+		return scope.Close (Number::New (status));
+	}
+}
+
+void init (Handle<Object> target) {	
+	SaneParameters::Init (target);
+	SaneHandle::Init (target);
+
 	NODE_SET_METHOD (target, "init", Init);
 	NODE_SET_METHOD (target, "exit", Exit);
 	NODE_SET_METHOD (target, "getDevices", GetDevices);
@@ -280,6 +311,7 @@ void init (Handle<Object> target) {
 	NODE_SET_METHOD (target, "close", Close);
 	NODE_SET_METHOD (target, "getOptionDescriptor", GetOptionDescriptor);
 	NODE_SET_METHOD (target, "controlOption", ControlOption);
+	NODE_SET_METHOD (target, "getParameters", GetParameters);
 }
 
 NODE_MODULE (sane, init)

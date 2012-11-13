@@ -3,24 +3,30 @@
 using namespace v8;
 using namespace node;
 
-SaneHandle::SaneHandle (SANE_Handle handle) :
-		_handle (handle) {
-}
+Persistent<FunctionTemplate> SaneHandle::function_template;
 
-SaneHandle::~SaneHandle () {
+void
+SaneHandle::Init (Handle<Object> target) {
+	HandleScope scope;
+
+	// Set up function template.
+	Handle<FunctionTemplate> t = FunctionTemplate::New ();
+	function_template = Persistent<FunctionTemplate>::New (t);
+	function_template->SetClassName (String::NewSymbol ("SaneHandle"));
+
+	// Obtain the instance template.
+	Local<ObjectTemplate> instance_template = function_template->InstanceTemplate ();
+	instance_template->SetInternalFieldCount (1);
 }
 
 Handle<Value>
-SaneHandle::New (SANE_Handle handle) {
+SaneHandle::Wrap (SANE_Handle handle) {
 	HandleScope scope;
 
-	Handle<FunctionTemplate> func_tpl = FunctionTemplate::New ();
-	func_tpl->SetClassName (String::New ("SaneHandle"));
-	func_tpl->InstanceTemplate ()->SetInternalFieldCount (1);
-
-	Handle<Object> object = func_tpl->InstanceTemplate ()->NewInstance ();
-	object->SetInternalField (0, External::New (handle));
-
-	return scope.Close (object);
+	// Create a new instance.
+	Local<Object> instance = function_template->InstanceTemplate ()->NewInstance ();	
+	instance->SetInternalField (0, External::New (handle));
+	
+	return scope.Close (instance);
 }
 

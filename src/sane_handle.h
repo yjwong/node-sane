@@ -6,13 +6,15 @@
 
 class SaneHandle : public node::ObjectWrap {
 public:
-	SaneHandle (SANE_Handle device);
-	~SaneHandle ();
+	SaneHandle () { };
+	~SaneHandle () { };
 
-	static v8::Handle<v8::Value> New (SANE_Handle handle);
+	static v8::Handle<v8::Value> New (const v8::Arguments& args);
+	static void Init (v8::Handle<v8::Object> target);
+	static v8::Handle<v8::Value> Wrap (SANE_Handle handle);
 
 private:
-	SANE_Handle _handle;
+	static v8::Persistent<v8::FunctionTemplate> function_template;
 };
 
 #endif /* SANE_HANDLE_H */

@@ -1,6 +1,6 @@
 node-sane
 =========
-### Node.js Interface to SANE (Scanner Access Made Easy)
+### Node.js Interface to SANE (Scanner Access Now Easy)
 
 This is a set of bindings from `libsane` to node. `libsane` is a scanner access
 library used to access scanners on supported systems.
@@ -28,7 +28,7 @@ To compile the native code bindings, do this:
 
 ``` bash
 $ cd node-sane
-$ node-waf configure build
+$ node-gyp configure build
 ```
 
 Assuming it built without errors, you should be able to run the examples and

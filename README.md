@@ -11,11 +11,7 @@ Installation
 You will need `libsane` installed. Most Linux distributions have it available
 by default, or with a package like `libsane-dev`.
 
-The easiest way to get `node-sane` and its tools is with `npm`:
-
-``` bash
-$ npm install sane
-```
+`node-sane` is not available via `npm` yet, but may soon be.
 
 If you want to hack on the source code, you can get it from github. Clone the
 repo like this:
@@ -40,7 +36,7 @@ Usage
 There are several example programs that show how to use `node-sane`. These
 examples are the best documentation. Try them out and see what they do.
 
-To use this library in your own program, `sane.js` and `sane_binding.node` must
+To use this library in your own program, `sane.js` and `sane.node` must
 be in `NODE_PATH`. `npm` takes care of this automatically.
 
 ``` js

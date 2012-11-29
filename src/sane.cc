@@ -642,22 +642,22 @@ void init (Handle<Object> target) {
 	SaneParameters::Init (target);
 	SaneHandle::Init (target);
 
-	NODE_SET_METHOD (target, "init", Init);
-	NODE_SET_METHOD (target, "exit", Exit);
-	NODE_SET_METHOD (target, "getDevices", GetDevices);
-	NODE_SET_METHOD (target, "getDevicesSync", GetDevicesSync);
-	NODE_SET_METHOD (target, "open", Open);
-	NODE_SET_METHOD (target, "openSync", OpenSync);
-	NODE_SET_METHOD (target, "close", Close);
-	NODE_SET_METHOD (target, "closeSync", CloseSync);
-	NODE_SET_METHOD (target, "getOptionDescriptor", GetOptionDescriptor);
-	NODE_SET_METHOD (target, "controlOption", ControlOption);
-	NODE_SET_METHOD (target, "getParameters", GetParameters);
-	NODE_SET_METHOD (target, "start", Start);
-	NODE_SET_METHOD (target, "read", Read);
-	NODE_SET_METHOD (target, "readSync", ReadSync); 
-	NODE_SET_METHOD (target, "cancel", Cancel);
-	NODE_SET_METHOD (target, "cancelSync", CancelSync);
+	SetMethod (target, "init", Init);
+	SetMethod (target, "exit", Exit);
+	SetMethod (target, "getDevices", GetDevices);
+	SetMethod (target, "getDevicesSync", GetDevicesSync);
+	SetMethod (target, "open", Open);
+	SetMethod (target, "openSync", OpenSync);
+	SetMethod (target, "close", Close);
+	SetMethod (target, "closeSync", CloseSync);
+	SetMethod (target, "getOptionDescriptor", GetOptionDescriptor);
+	SetMethod (target, "controlOption", ControlOption);
+	SetMethod (target, "getParameters", GetParameters);
+	SetMethod (target, "start", Start);
+	SetMethod (target, "read", Read);
+	SetMethod (target, "readSync", ReadSync); 
+	SetMethod (target, "cancel", Cancel);
+	SetMethod (target, "cancelSync", CancelSync);
 }
 
 NODE_MODULE (sane, init)

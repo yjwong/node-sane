@@ -2,7 +2,7 @@
   "name": "sane",
   "version": "0.0.1",
   "author": "Wong Yong Jie <yjwong92@gmail.com>",
-  "description": "a node.js interface to SANE (Scanner Access Made Easy)",
+  "description": "a node.js interface to SANE (Scanner Access Now Easy)",
   "main": "./lib/sane",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
     "sane",
     "scanner",
     "access",
-    "made",
+    "now",
     "easy"
   ],
   "license": "MIT",

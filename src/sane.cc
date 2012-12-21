@@ -391,7 +391,54 @@ ControlOption (const Arguments& args) {
 	SANE_Int i;
 	status = sane_control_option (ptr, n->Value (), (SANE_Action) a->Value (), v, &i);
 
+	// Perform byte order conversion.
+	size_t v_words = Buffer::Length (args[3]->ToObject ()) / sizeof (uint32_t);
+	for (size_t j = 0; j < v_words; j++) {
+		uint32_t* v_uint32 = (uint32_t*) v;
+		v_uint32[j] = htonl (v_uint32[j]);
+	}
+
 	return scope.Close (Number::New (status));
+}
+
+Handle<Value>
+OptionIsActive (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsInt32 ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an integer")));
+	}
+
+	Local<Integer> cap = args[0]->ToInteger ();
+	bool ret = SANE_OPTION_IS_ACTIVE (cap->Value ());
+
+	return scope.Close (Boolean::New (ret));
+}
+
+Handle<Value>
+OptionIsSettable (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsInt32 ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an integer")));
+	}
+
+	Local<Integer> cap = args[0]->ToInteger ();
+	bool ret = SANE_OPTION_IS_SETTABLE (cap->Value ());
+
+	return scope.Close (Boolean::New (ret));
 }
 
 Handle<Value>
@@ -652,6 +699,8 @@ void init (Handle<Object> target) {
 	SetMethod (target, "closeSync", CloseSync);
 	SetMethod (target, "getOptionDescriptor", GetOptionDescriptor);
 	SetMethod (target, "controlOption", ControlOption);
+        SetMethod (target, "optionIsActive", OptionIsActive);
+        SetMethod (target, "optionIsSettable", OptionIsSettable);
 	SetMethod (target, "getParameters", GetParameters);
 	SetMethod (target, "start", Start);
 	SetMethod (target, "read", Read);

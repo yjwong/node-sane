@@ -685,6 +685,46 @@ CancelSync (const Arguments& args) {
 	return scope.Close (Undefined ());
 }
 
+Handle<Value>
+FixedToNumber (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsInt32 ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be an integer")));
+	}
+
+	Local<Integer> n = args[0]->ToInteger ();
+	double d = SANE_UNFIX (n->Value ());
+
+	return scope.Close (Number::New (d));
+}
+
+Handle<Value>
+NumberToFixed (const Arguments& args) {
+	HandleScope scope;
+
+	if (args.Length () < 1) {
+		return ThrowException (Exception::TypeError (String::New (
+			"There should be exactly 1 argument")));
+	}
+
+	if (!args[0]->IsNumber ()) {
+		return ThrowException (Exception::TypeError (String::New (
+			"First argument must be a number")));
+	}
+
+	Local<Number> n = args[0]->ToNumber ();
+	int val = SANE_FIX (n->Value ());
+
+	return scope.Close (Integer::New (val));
+}
+
 void init (Handle<Object> target) {	
 	SaneParameters::Init (target);
 	SaneHandle::Init (target);
@@ -707,6 +747,8 @@ void init (Handle<Object> target) {
 	SetMethod (target, "readSync", ReadSync); 
 	SetMethod (target, "cancel", Cancel);
 	SetMethod (target, "cancelSync", CancelSync);
+	SetMethod (target, "fixedToNumber", FixedToNumber);
+	SetMethod (target, "numberToFixed", NumberToFixed);
 }
 
 NODE_MODULE (sane, init)

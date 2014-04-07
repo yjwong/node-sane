@@ -1,5 +1,5 @@
 #include <iostream>
-#include <string>
+#include <cstring>
 #include <node.h>
 #include <node_buffer.h>
 #include <node_version.h>
@@ -100,7 +100,7 @@ GetDevices (const Arguments& args) {
 	baton->local_only = local_only->Value ();
 
 	uv_queue_work (uv_default_loop (), &baton->request,
-		GetDevicesAsyncWork, GetDevicesAsyncAfter);
+		GetDevicesAsyncWork, (uv_after_work_cb) GetDevicesAsyncAfter);
 
 	return Undefined ();
 }
@@ -206,7 +206,7 @@ Open (const Arguments& args) {
 	baton->name = name_str;
 
 	uv_queue_work (uv_default_loop (), &baton->request,
-		OpenAsyncWork, OpenAsyncAfter);
+		OpenAsyncWork, (uv_after_work_cb) OpenAsyncAfter);
 
 	return scope.Close (Undefined ());
 }
@@ -293,7 +293,7 @@ Close (const Arguments& args) {
 	baton->handle = ptr;
 
 	uv_queue_work (uv_default_loop (), &baton->request,
-		CloseAsyncWork, CloseAsyncAfter);
+		CloseAsyncWork, (uv_after_work_cb) CloseAsyncAfter);
 
 	return scope.Close (Undefined ());
 }
@@ -566,7 +566,7 @@ Read (const Arguments& args) {
 	baton->buf_len = Buffer::Length (args[1]->ToObject ());
 
 	uv_queue_work (uv_default_loop (), &baton->request,
-		ReadAsyncWork, ReadAsyncAfter);
+		ReadAsyncWork, (uv_after_work_cb) ReadAsyncAfter);
 
 	return scope.Close (Undefined ());
 }
@@ -658,7 +658,7 @@ Cancel (const Arguments& args) {
 	baton->handle = ptr;
 
 	uv_queue_work (uv_default_loop (), &baton->request,
-		CancelAsyncWork, CancelAsyncAfter);
+		CancelAsyncWork, (uv_after_work_cb) CancelAsyncAfter);
 
 	return scope.Close (Undefined ());
 }

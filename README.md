@@ -17,7 +17,7 @@ If you want to hack on the source code, you can get it from github. Clone the
 repo like this:
 
 ``` bash
-$ git clone git://github.com/yjwong/node-sane.git
+$ git clone https://github.com/yjwong/node-sane.git
 ```
 
 To compile the native code bindings, do this:
@@ -33,8 +33,8 @@ then write your own scanner access programs.
 Usage
 -----
 
-There are several example programs that show how to use `node-sane`. These
-examples are the best documentation. Try them out and see what they do.
+There is currently no documentation for the moment. Feel free to contribute
+if you have some.
 
 To use this library in your own program, `sane.js` and `sane.node` must
 be in `NODE_PATH`. `npm` takes care of this automatically.

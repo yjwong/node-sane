@@ -28,8 +28,9 @@ Init (const Arguments& args) {
 
 Handle<Value>
 Exit (const Arguments& args) {
+	HandleScope scope;
 	sane_exit ();
-	return Undefined ();
+	return scope.Close (Undefined ());
 }
 
 struct GetDevicesBaton {
@@ -102,7 +103,7 @@ GetDevices (const Arguments& args) {
 	uv_queue_work (uv_default_loop (), &baton->request,
 		GetDevicesAsyncWork, (uv_after_work_cb) GetDevicesAsyncAfter);
 
-	return Undefined ();
+	return scope.Close (Undefined ());
 }
 
 Handle<Value>

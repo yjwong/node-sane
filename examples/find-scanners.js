@@ -11,13 +11,3 @@ sane.getDevices(true, function (devices) {
   console.log(devices);
 });
 
-/*
-sane.open('test:0', function (device) {
-  var i = 0;
-  var options;
-  while (options = sane.getOptionDescriptor(device.handle, i)) {
-    console.log(options);
-    i++;
-  }
-});
-*/

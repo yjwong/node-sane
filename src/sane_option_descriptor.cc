@@ -1,89 +1,114 @@
 #include "sane_option_descriptor.h"
 
-using namespace v8;
-using namespace node;
+using v8::Local;
+using v8::FunctionTemplate;
+using v8::External;
 
-SaneOptionDescriptor::SaneOptionDescriptor (const SANE_Option_Descriptor * descriptor) :
-		_descriptor (descriptor) {
+Nan::Persistent<FunctionTemplate> SaneOptionDescriptor::constructor_template;
+
+SaneOptionDescriptor::SaneOptionDescriptor(const SANE_Option_Descriptor* descriptor) :
+		_descriptor(descriptor) {
 }
 
-SaneOptionDescriptor::~SaneOptionDescriptor () {
+SaneOptionDescriptor::~SaneOptionDescriptor() {
 }
 
-Handle<Value>
-SaneOptionDescriptor::New (const SANE_Option_Descriptor * descriptor) {
-	SaneOptionDescriptor * descriptor_wrap = new SaneOptionDescriptor (descriptor);
+NAN_MODULE_INIT(SaneOptionDescriptor::Init) {
+    Nan::HandleScope scope;
 
-	Handle<FunctionTemplate> func_tpl = FunctionTemplate::New ();
-	func_tpl->SetClassName (String::New ("SaneOptionDescriptor"));
-	func_tpl->InstanceTemplate ()->SetInternalFieldCount (1);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("name"), GetName);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("title"), GetTitle);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("desc"), GetDesc);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("type"), GetType);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("unit"), GetUnit);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("size"), GetSize);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("cap"), GetCap);
-	func_tpl->InstanceTemplate ()->SetAccessor (String::New ("constraintType"), GetConstraintType);
-	//func_tpl->InstanceTemplate ()->SetAccessor (String::New ("constraint"), GetConstraint);
-	
-	Handle<Object> object = func_tpl->InstanceTemplate ()->NewInstance ();
-	object->SetInternalField (0, External::New (descriptor_wrap));
-	return object;
+    Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+
+    tpl->SetClassName(Nan::New("SaneOptionDescriptor").ToLocalChecked());
+    tpl->InstanceTemplate()->SetInternalFieldCount(1);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("name").ToLocalChecked(), GetName);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("title").ToLocalChecked(), GetTitle);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("descr").ToLocalChecked(), GetDesc);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("type").ToLocalChecked(), GetType);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("unit").ToLocalChecked(), GetUnit);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("size").ToLocalChecked(), GetSize);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("cap").ToLocalChecked(), GetCap);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("constraintType").ToLocalChecked(), GetConstraintType);
+    //Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("constraint").ToLocalChecked(), GetConstraint);
+    
+    constructor_template.Reset(tpl);
+    target->Set(Nan::New("SaneOptionDescriptor").ToLocalChecked(), tpl->GetFunction()); 
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetName (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
+NAN_METHOD(SaneOptionDescriptor::New) {
+    Nan::HandleScope scope;
+
+    if (!info.IsConstructCall()) {
+        return Nan::ThrowTypeError("Use the new operator to create new SaneOptionDescriptor objects");
+    }
+
+    if (info.Length() < 1 || !info[0]->IsExternal()) {
+        return Nan::ThrowTypeError("SaneOptionDescriptor object cannot be created directly");
+    }
+
+    SaneOptionDescriptor* descriptor = new SaneOptionDescriptor(static_cast<SANE_Option_Descriptor*>(
+        External::Cast(*info[0])->Value()));
+    descriptor->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
+}
+
+NAN_GETTER(SaneOptionDescriptor::GetName) {
+    Nan::HandleScope scope;
 	const SANE_Option_Descriptor* descriptor = 
-		ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor;
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
 
 	if (descriptor->name == NULL) {
-		return scope.Close (Undefined ());
+        info.GetReturnValue().Set(Nan::Undefined());
 	} else {
-		return scope.Close (String::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->name));
+        info.GetReturnValue().Set(Nan::New(descriptor->name).ToLocalChecked());
 	}
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetTitle (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (String::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->title));
+NAN_GETTER(SaneOptionDescriptor::GetTitle) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->title).ToLocalChecked());
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetDesc (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (String::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->desc));
+NAN_GETTER(SaneOptionDescriptor::GetDesc) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->desc).ToLocalChecked());
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetType (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (Integer::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->type));
+NAN_GETTER(SaneOptionDescriptor::GetType) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->type));
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetUnit (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (Integer::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->unit));
+NAN_GETTER(SaneOptionDescriptor::GetUnit) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->unit));
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetSize (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (Integer::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->size));
+NAN_GETTER(SaneOptionDescriptor::GetSize) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->size));
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetCap (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (Integer::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->cap));
+NAN_GETTER(SaneOptionDescriptor::GetCap) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->cap));
 }
 
-Handle<Value>
-SaneOptionDescriptor::GetConstraintType (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	return scope.Close (Integer::New (ObjectWrap::Unwrap<SaneOptionDescriptor> (info.Holder ())->_descriptor->constraint_type));
+NAN_GETTER(SaneOptionDescriptor::GetConstraintType) {
+    Nan::HandleScope scope;
+	const SANE_Option_Descriptor* descriptor = 
+		Nan::ObjectWrap::Unwrap<SaneOptionDescriptor>(info.Holder())->_descriptor;
+    info.GetReturnValue().Set(Nan::New(descriptor->constraint_type));
 }
 

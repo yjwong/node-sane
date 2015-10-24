@@ -1,188 +1,153 @@
 #include "sane_parameters.h"
 
-using namespace v8;
-using namespace node;
+using v8::Persistent;
+using v8::FunctionTemplate;
+using v8::Local;
+using v8::External;
+using v8::Integer;
+using v8::Boolean;
 
-Persistent<FunctionTemplate> SaneParameters::constructor_template;
+Nan::Persistent<FunctionTemplate> SaneParameters::constructor_template;
 
-void
-SaneParameters::Init (Handle<Object> target) {
-	HandleScope scope;
+NAN_MODULE_INIT(SaneParameters::Init) {
+    Nan::HandleScope scope;
 
 	// Set up function template
-	Local<FunctionTemplate> t = FunctionTemplate::New (SaneParameters::New);
+    Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+    tpl->SetClassName(Nan::New("SaneParameters").ToLocalChecked());
+    tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-	// Constructor template
-	constructor_template = Persistent<FunctionTemplate>::New (t);
-	constructor_template->SetClassName (String::NewSymbol ("SaneParameters"));
-
-	// Instance template
-	Local<ObjectTemplate> instance_template = constructor_template->InstanceTemplate ();
-	instance_template->SetInternalFieldCount (1);
-
-	// Set instance template parameters
-	instance_template->SetAccessor (String::New ("format"), GetFormat, SetFormat);
-	instance_template->SetAccessor (String::New ("lastFrame"), GetLastFrame, SetLastFrame);
-	instance_template->SetAccessor (String::New ("bytesPerLine"), GetBytesPerLine, SetBytesPerLine);
-	instance_template->SetAccessor (String::New ("pixelsPerLine"), GetPixelsPerLine, SetPixelsPerLine);
-	instance_template->SetAccessor (String::New ("lines"), GetLines, SetLines);
-	instance_template->SetAccessor (String::New ("depth"), GetDepth, SetDepth);
+	// Set instance template parameter
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("format").ToLocalChecked(), GetFormat, SetFormat);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("lastFrame").ToLocalChecked(), GetLastFrame, SetLastFrame);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("bytesPerLine").ToLocalChecked(), GetBytesPerLine, SetBytesPerLine);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("pixelsPerLine").ToLocalChecked(), GetPixelsPerLine, SetPixelsPerLine);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("lines").ToLocalChecked(), GetLines, SetLines);
+    Nan::SetAccessor(tpl->InstanceTemplate(), Nan::New("depth").ToLocalChecked(), GetDepth, SetDepth);
 
 	// Make it visible in JavaScript
-	target->Set (String::NewSymbol ("SaneParameters"), constructor_template->GetFunction ());
+    constructor_template.Reset(tpl);
+    target->Set(Nan::New("SaneParameters").ToLocalChecked(), tpl->GetFunction());
 }
 
-Handle<Value>
-SaneParameters::New (const Arguments& args) {
-	HandleScope scope;
-	
-	SANE_Parameters * parameters = new SANE_Parameters ();
-	args.Holder ()->SetInternalField (0, External::New (parameters));
-	return args.Holder ();
+NAN_METHOD(SaneParameters::New) {
+    Nan::HandleScope scope;
+	SANE_Parameters* parameters = new SANE_Parameters();
+	info.Holder()->SetInternalField(0, Nan::New<External>(parameters));
+    info.GetReturnValue().Set(info.Holder());
 }
 
-Handle<Value>
-SaneParameters::Wrap (SANE_Parameters * parameters) {
-	HandleScope scope;
-
-	// Create a new instance.
-	Local<Object> instance = constructor_template->InstanceTemplate ()->NewInstance ();
-	instance->SetInternalField (0, External::New (parameters));
-	
-	return scope.Close (instance);
+NAN_GETTER(SaneParameters::GetFormat) {
+    Nan::HandleScope scope;
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+    info.GetReturnValue().Set(Nan::New(parameters->format));
 }
 
-Handle<Value>
-SaneParameters::GetFormat (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder());
-	return scope.Close (Integer::New (parameters->format));
-	//return scope.Close (Integer::New (ObjectWrap::Unwrap<SaneParameters> (info.Holder ())->_parameters->format));
-}
-
-void
-SaneParameters::SetFormat (Local<String> property, Local<Value> value,
-		const AccessorInfo& info) {
-	HandleScope scope;
-	if (!value->IsInt32 ()) {
-		ThrowException (Exception::TypeError (String::New (
-			"format must be an integer")));
-		return;
+NAN_SETTER(SaneParameters::SetFormat) {
+    Nan::HandleScope scope;
+	if (!value->IsInt32()) {
+        return Nan::ThrowTypeError("format must be an integer");
 	}
 
-	Local<Integer> format = value->ToInteger ();
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	parameters->format = (SANE_Frame) format->Value ();
+	Local<Integer> format = value.As<Integer>();
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+	parameters->format = (SANE_Frame) format->Value();
 }
 
-Handle<Value>
-SaneParameters::GetLastFrame (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	return scope.Close (Boolean::New (parameters->last_frame));
+NAN_GETTER(SaneParameters::GetLastFrame) {
+    Nan::HandleScope scope;
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+    info.GetReturnValue().Set(Nan::New(parameters->last_frame));
 }
 
-void
-SaneParameters::SetLastFrame (Local<String> property, Local<Value> value,
-		const AccessorInfo& info) {
-	HandleScope scope;
-	if (!value->IsBoolean ()) {
-		ThrowException (Exception::TypeError (String::New (
-			"lastFrame must be a boolean")));
-		return;
+NAN_SETTER(SaneParameters::SetLastFrame) {
+    Nan::HandleScope scope;
+	if (!value->IsBoolean()) {
+		return Nan::ThrowTypeError("lastFrame must be a boolean");
 	}
 
-	Local<Boolean> last_frame = value->ToBoolean ();
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	parameters->last_frame = last_frame->Value ();
+	Local<Boolean> lastFrame = Nan::To<Boolean>(value).ToLocalChecked();
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+	parameters->last_frame = lastFrame->Value();
 }
 
-Handle<Value>
-SaneParameters::GetBytesPerLine (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	return scope.Close (Integer::New (parameters->bytes_per_line));
+NAN_GETTER(SaneParameters::GetBytesPerLine) {
+    Nan::HandleScope scope;
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+    info.GetReturnValue().Set(Nan::New(parameters->bytes_per_line));
 }
 
-void
-SaneParameters::SetBytesPerLine (Local<String> property, Local<Value> value,
-		const AccessorInfo& info) {
-	HandleScope scope;
-	if (!value->IsInt32 ()) {
-		ThrowException (Exception::TypeError (String::New (
-			"bytesPerLine must be an integer")));
-		return;
+NAN_SETTER(SaneParameters::SetBytesPerLine) {
+    Nan::HandleScope scope;
+	if (!value->IsInt32()) {
+		return Nan::ThrowTypeError("bytesPerLine must be an integer");
 	}
 
-	Local<Integer> bytes_per_line = value->ToInteger ();
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	parameters->bytes_per_line = bytes_per_line->Value ();
+	Local<Integer> bytesPerLine = value.As<Integer>();
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+	parameters->bytes_per_line = bytesPerLine->Value();
 }
 
-Handle<Value>
-SaneParameters::GetPixelsPerLine (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	return scope.Close (Integer::New (parameters->pixels_per_line));
+NAN_GETTER(SaneParameters::GetPixelsPerLine) {
+    Nan::HandleScope scope;
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+    info.GetReturnValue().Set(Nan::New(parameters->pixels_per_line));
 }
 
-void
-SaneParameters::SetPixelsPerLine (Local<String> property, Local<Value> value,
-		const AccessorInfo& info) {
-	HandleScope scope;
-	if (!value->IsInt32 ()) {
-		ThrowException (Exception::TypeError (String::New (
-			"pixelsPerLine must be an integer")));
-		return;
+NAN_SETTER(SaneParameters::SetPixelsPerLine) {
+    Nan::HandleScope scope;
+	if (!value->IsInt32()) {
+		return Nan::ThrowTypeError("pixelsPerLine must be an integer");
 	}
 
-	Local<Integer> pixels_per_line = value->ToInteger ();
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	parameters->pixels_per_line = pixels_per_line->Value ();
+	Local<Integer> pixelsPerLine = value.As<Integer>();
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+	parameters->pixels_per_line = pixelsPerLine->Value();
 }
 
-
-Handle<Value>
-SaneParameters::GetLines (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	return scope.Close (Integer::New (parameters->lines));
+NAN_GETTER(SaneParameters::GetLines) {
+    Nan::HandleScope scope;
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+    info.GetReturnValue().Set(Nan::New(parameters->lines));
 }
 
-void
-SaneParameters::SetLines (Local<String> property, Local<Value> value,
-		const AccessorInfo& info) {
-	HandleScope scope;
-	if (!value->IsInt32 ()) {
-		ThrowException (Exception::TypeError (String::New (
-			"lines must be an integer")));
-		return;
+NAN_SETTER(SaneParameters::SetLines) {
+    Nan::HandleScope scope;
+	if (!value->IsInt32()) {
+		return Nan::ThrowTypeError("lines must be an integer");
 	}
 
-	Local<Integer> lines = value->ToInteger ();
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	parameters->lines = lines->Value ();
+	Local<Integer> lines = value.As<Integer>();
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+	parameters->lines = lines->Value();
 }
 
-Handle<Value>
-SaneParameters::GetDepth (Local<String> property, const AccessorInfo& info) {
-	HandleScope scope;
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	return scope.Close (Integer::New (parameters->depth));
+NAN_GETTER(SaneParameters::GetDepth) {
+    Nan::HandleScope scope;
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+    info.GetReturnValue().Set(Nan::New(parameters->depth));
 }
 
-void
-SaneParameters::SetDepth (Local<String> property, Local<Value> value,
-		const AccessorInfo& info) {
-	HandleScope scope;
-	if (!value->IsInt32 ()) {
-		ThrowException (Exception::TypeError (String::New (
-			"depth must be an integer")));
-		return;
+NAN_SETTER(SaneParameters::SetDepth) {
+    Nan::HandleScope scope;
+	if (!value->IsInt32()) {
+		return Nan::ThrowTypeError("depth must be an integer");
 	}
 
-	Local<Integer> depth = value->ToInteger ();
-	SANE_Parameters * parameters = ObjectWrap::Unwrap<SANE_Parameters> (info.Holder ());
-	parameters->depth = depth->Value ();
+	Local<Integer> depth = value.As<Integer>();
+    Local<External> parametersExt = info.Holder()->GetInternalField(0).As<External>();
+	SANE_Parameters* parameters = static_cast<SANE_Parameters*>(parametersExt->Value());
+	parameters->depth = depth->Value();
 }
 

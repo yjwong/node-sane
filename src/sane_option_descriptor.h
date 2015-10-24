@@ -3,26 +3,30 @@
 
 #include <sane/sane.h>
 #include <node.h>
+#include "nan.h"
 
-class SaneOptionDescriptor : public node::ObjectWrap {
+class SaneOptionDescriptor : public Nan::ObjectWrap {
 public:
-	SaneOptionDescriptor (const SANE_Option_Descriptor * descriptor);
-	~SaneOptionDescriptor ();
+	explicit SaneOptionDescriptor(const SANE_Option_Descriptor* descriptor);
+	~SaneOptionDescriptor();
 
-	static v8::Handle<v8::Value> New (const SANE_Option_Descriptor * descriptor);
+	static Nan::Persistent<v8::FunctionTemplate> constructor_template;
+	static NAN_MODULE_INIT(Init);
 
 private:
-	const SANE_Option_Descriptor * _descriptor;
+    static NAN_METHOD(New);
 
-	static v8::Handle<v8::Value> GetName (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetTitle (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetDesc (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetType (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetUnit (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetSize (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetCap (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetConstraintType (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	//static v8::Handle<v8::Value> GetConstraint (v8::Local<v8::String> property, const v8::AccessorInfo& info);
+	static NAN_GETTER(GetName);
+	static NAN_GETTER(GetTitle);
+	static NAN_GETTER(GetDesc);
+	static NAN_GETTER(GetType);
+	static NAN_GETTER(GetUnit);
+	static NAN_GETTER(GetSize);
+	static NAN_GETTER(GetCap);
+	static NAN_GETTER(GetConstraintType);
+	//static NAN_GETTER(GetConstraint);
+	
+	const SANE_Option_Descriptor* _descriptor;
 };
 
 #endif /* SANE_OPTION_DESCRIPTOR_H */

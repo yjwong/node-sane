@@ -1,32 +1,41 @@
 #include "sane_handle.h"
 
-using namespace v8;
-using namespace node;
+using v8::FunctionTemplate;
+using v8::Local;
+using v8::External;
 
-Persistent<FunctionTemplate> SaneHandle::function_template;
+Nan::Persistent<FunctionTemplate> SaneHandle::constructor_template;
 
-void
-SaneHandle::Init (Handle<Object> target) {
-	HandleScope scope;
+NAN_MODULE_INIT(SaneHandle::Init) {
+    Nan::HandleScope scope;
 
-	// Set up function template.
-	Handle<FunctionTemplate> t = FunctionTemplate::New ();
-	function_template = Persistent<FunctionTemplate>::New (t);
-	function_template->SetClassName (String::NewSymbol ("SaneHandle"));
+    // Prepare constructor template.
+    Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+    tpl->SetClassName(Nan::New("SaneHandle").ToLocalChecked());
+    tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-	// Obtain the instance template.
-	Local<ObjectTemplate> instance_template = function_template->InstanceTemplate ();
-	instance_template->SetInternalFieldCount (1);
+    constructor_template.Reset(tpl);
+    target->Set(Nan::New("SaneHandle").ToLocalChecked(), tpl->GetFunction());
 }
 
-Handle<Value>
-SaneHandle::Wrap (SANE_Handle handle) {
-	HandleScope scope;
+NAN_METHOD(SaneHandle::New) {
+    Nan::HandleScope scope;
 
-	// Create a new instance.
-	Local<Object> instance = function_template->InstanceTemplate ()->NewInstance ();	
-	instance->SetInternalField (0, External::New (handle));
-	
-	return scope.Close (instance);
+    if (!info.IsConstructCall()) {
+        return Nan::ThrowTypeError("Use the new operator to create new SaneHandle objects");
+    }
+
+    if (info.Length() < 1 || !info[0]->IsExternal()) {
+        return Nan::ThrowTypeError("SaneHandle object cannot be created directly");
+    }
+
+    SaneHandle* handle = new SaneHandle(static_cast<SANE_Handle>(
+        External::Cast(*info[0])->Value()));
+    handle->Wrap(info.This());
+    info.GetReturnValue().Set(info.This());
+}
+
+SANE_Handle SaneHandle::getHandle() {
+    return _handle;
 }
 

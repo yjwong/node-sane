@@ -11,9 +11,9 @@ Installation
 You will need `libsane` installed. Most Linux distributions have it available
 by default, or with a package like `libsane-dev`.
 
-`node-sane` is not available via `npm` yet, but may soon be.
+`npm install node-sane`
 
-If you want to hack on the source code, you can get it from github. Clone the
+If you want to hack on the source code, you can get it from Github. Clone the
 repo like this:
 
 ``` bash
@@ -24,7 +24,7 @@ To compile the native code bindings, do this:
 
 ``` bash
 $ cd node-sane
-$ node-gyp configure build
+$ node-pre-gyp configure build
 ```
 
 Assuming it built without errors, you should be able to run the examples and
@@ -40,7 +40,7 @@ To use this library in your own program, `sane.js` and `sane.node` must
 be in `NODE_PATH`. `npm` takes care of this automatically.
 
 ``` js
-var sane = require('sane');
+var sane = require('node-sane');
 sane.init();
 ```
 

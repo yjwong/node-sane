@@ -3,38 +3,34 @@
 
 #include <sane/sane.h>
 #include <node.h>
+#include "nan.h"
 
 class SaneParameters : public node::ObjectWrap {
 public:
-	SaneParameters () { };
-	~SaneParameters () { };
-
-	static void Init (v8::Handle<v8::Object> target);
-	static v8::Handle<v8::Value> New (const v8::Arguments& args);
-	static v8::Handle<v8::Value> Wrap (SANE_Parameters * parameters);
-	using node::ObjectWrap::Wrap;
+	SaneParameters(SANE_Parameters* parameters) : _parameters(parameters) { };
+	~SaneParameters() { };
+	
+	static Nan::Persistent<v8::FunctionTemplate> constructor_template;
+	static NAN_MODULE_INIT(Init);
 
 private:
-	static v8::Persistent<v8::FunctionTemplate> constructor_template;
-	SANE_Parameters * _parameters;
+	static NAN_METHOD(New);
 
-	static v8::Handle<v8::Value> GetFormat (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static void SetFormat (v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
+	static NAN_GETTER(GetFormat);
+	static NAN_GETTER(GetLastFrame);
+	static NAN_GETTER(GetBytesPerLine);
+	static NAN_GETTER(GetPixelsPerLine);
+	static NAN_GETTER(GetLines);
+	static NAN_GETTER(GetDepth);
 
-	static v8::Handle<v8::Value> GetLastFrame (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static void SetLastFrame (v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
+	static NAN_SETTER(SetFormat);
+	static NAN_SETTER(SetLastFrame);
+	static NAN_SETTER(SetBytesPerLine);
+	static NAN_SETTER(SetPixelsPerLine);
+	static NAN_SETTER(SetLines);
+	static NAN_SETTER(SetDepth);
 
-	static v8::Handle<v8::Value> GetBytesPerLine (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static void SetBytesPerLine (v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
-
-	static v8::Handle<v8::Value> GetPixelsPerLine (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static void SetPixelsPerLine (v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
-
-	static v8::Handle<v8::Value> GetLines (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static void SetLines (v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
-
-	static v8::Handle<v8::Value> GetDepth (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static void SetDepth (v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::AccessorInfo& info);
+	SANE_Parameters* _parameters;
 };
 
 #endif /* SANE_PARAMETERS_H */

@@ -3,21 +3,24 @@
 
 #include <sane/sane.h>
 #include <node.h>
+#include "nan.h"
 
-class SaneDevice : public node::ObjectWrap {
+class SaneDevice : public Nan::ObjectWrap {
 public:
-	SaneDevice (const SANE_Device * device);
-	~SaneDevice ();
-
-	static v8::Handle<v8::Value> New (const SANE_Device * device);
+    static Nan::Persistent<v8::FunctionTemplate> constructor_template;
+    static NAN_MODULE_INIT(Init);
 
 private:
-	const SANE_Device * _device;
+    explicit SaneDevice(const SANE_Device* device);
+	~SaneDevice();
 
-	static v8::Handle<v8::Value> GetName (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetVendor (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetModel (v8::Local<v8::String> property, const v8::AccessorInfo& info);
-	static v8::Handle<v8::Value> GetType (v8::Local<v8::String> property, const v8::AccessorInfo& info);
+    static NAN_METHOD(New);
+	static NAN_GETTER(GetName);
+	static NAN_GETTER(GetVendor);
+	static NAN_GETTER(GetModel);
+	static NAN_GETTER(GetType);
+	
+    const SANE_Device* _device;
 };
 
 #endif /* SANE_DEVICE_H */

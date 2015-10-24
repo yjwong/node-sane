@@ -1,4 +1,8 @@
-var sane = require('../build/Release/sane');
+'use strict';
+var binary = require('node-pre-gyp');
+var path = require('path');
+var bindingPath = binary.find(path.resolve(path.join(__dirname, './package.json')));
+var sane = require(bindingPath);
 module.exports = sane;
 
 sane.Status = {
@@ -14,7 +18,7 @@ sane.Status = {
   IO_ERROR      : 9,
   NO_MEM        : 10,
   ACCESS_DENIED : 11
-}
+};
 Object.freeze(sane.Status);
 
 sane.ValueType = {
@@ -24,7 +28,7 @@ sane.ValueType = {
   STRING : 3,
   BUTTON : 4,
   GROUP  : 5
-}
+};
 Object.freeze(sane.ValueType);
 
 sane.Unit = {
@@ -35,7 +39,7 @@ sane.Unit = {
   DPI         : 4,
   PERCENT     : 5,
   MICROSECOND : 6
-}
+};
 Object.freeze(sane.Unit);
 
 sane.Cap = {
@@ -46,7 +50,7 @@ sane.Cap = {
   AUTOMATIC   : 16,
   INACTIVE    : 32,
   ADVANCED    : 64
-}
+};
 Object.freeze(sane.Cap);
 
 sane.ConstraintType = {
@@ -54,21 +58,21 @@ sane.ConstraintType = {
   RANGE       : 1,
   WORD_LIST   : 2,
   STRING_LIST : 3
-}
+};
 Object.freeze(sane.ConstraintType);
 
 sane.Action = {
   GET_VALUE : 0,
   SET_VALUE : 1,
   SET_AUTO  : 2
-}
+};
 Object.freeze(sane.Action);
 
 sane.Info = {
   INEXACT        : 1,
   RELOAD_OPTIONS : 2,
   RELOAD_PARAMS  : 4
-}
+};
 Object.freeze(sane.Info);
 
 sane.Frame = {
@@ -77,6 +81,6 @@ sane.Frame = {
   RED   : 2,
   GREEN : 3,
   BLUE  : 4
-}
+};
 Object.freeze(sane.Frame);
 

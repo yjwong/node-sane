@@ -1,2 +1,8 @@
 build/*
 src/build/*
+lib/*
+node_modules/*
+
+# Vim temporary files
+*.swp
+*.swo

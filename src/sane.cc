@@ -1,8 +1,8 @@
 #include <iostream>
 #include <cstring>
+#include <arpa/inet.h>
 #include <node.h>
 #include <node_buffer.h>
-#include <node_version.h>
 #include <sane/sane.h>
 #include <v8.h>
 #include "sane_device.h"
@@ -10,747 +10,652 @@
 #include "sane_option_descriptor.h"
 #include "sane_parameters.h"
 
-using namespace v8;
-using namespace node;
+using v8::Number;
+using v8::Local;
+using v8::Object;
+using v8::ObjectTemplate;
+using v8::String;
+using v8::Integer;
+using v8::Array;
+using v8::Value;
+using v8::Boolean;
+using v8::Function;
+using v8::Handle;
+using v8::External;
+using v8::FunctionTemplate;
 
 // These things need to be moved into a class, so each instance can have its own session.
 // Right now, there can only be one SANE instance at a time.
 SANE_Int version_code;
 
-Handle<Value>
-Init (const Arguments& args) {
-	HandleScope scope;
-
-	SANE_Status status;
-	status = sane_init (&version_code, NULL); // TODO: Set authorization callback.
-	return scope.Close (Number::New (status));
+NAN_METHOD(Init) {
+    Nan::HandleScope scope;
+    SANE_Status status;
+    status = sane_init(&version_code, NULL); // TODO: Set authorization callback.
+    info.GetReturnValue().Set(Nan::New(status));
 }
 
-Handle<Value>
-Exit (const Arguments& args) {
-	HandleScope scope;
-	sane_exit ();
-	return scope.Close (Undefined ());
+NAN_METHOD(Exit) {
+    Nan::HandleScope scope;
+    sane_exit();
+    info.GetReturnValue().Set(Nan::Undefined());
 }
 
-struct GetDevicesBaton {
-	uv_work_t request;
-	Persistent<Function> callback;
-	bool local_only;
+class GetDevicesWorker : public Nan::AsyncWorker {
+public:
+    GetDevicesWorker(Nan::Callback* callback, bool localOnly) :
+        Nan::AsyncWorker(callback), localOnly(localOnly) {};
+    ~GetDevicesWorker() {};
 
-	// Resultant data
-	SANE_Status status;
-	const SANE_Device** device_list;
+    void Execute() {
+        status = sane_get_devices(&deviceList, localOnly);
+    }
+
+    void HandleOKCallback() {
+        Nan::HandleScope scope;
+
+        Local<ObjectTemplate> result = Nan::New<ObjectTemplate>();
+        Local<Object> object = result->NewInstance();
+        object->Set(Nan::New("status").ToLocalChecked(), Nan::New(status));
+
+        if (status == SANE_STATUS_GOOD) {
+            Local<Array> deviceListArr = Nan::New<Array>();
+            for (int i = 0; deviceList[i]; i++) {
+                Local<FunctionTemplate> deviceTpl = Nan::New(SaneDevice::constructor_template);
+                Local<Function> deviceFunc = deviceTpl->GetFunction();
+                Handle<Value> deviceFuncArgs[] = { Nan::New<External>(const_cast<SANE_Device*>(deviceList[i])) };
+                Local<Value> deviceObj = deviceFunc->NewInstance(1, deviceFuncArgs);
+                deviceListArr->Set(i, deviceObj);
+            }
+            object->Set(Nan::New("deviceList").ToLocalChecked(), deviceListArr);
+        }
+
+        Local<Value> argv[] = { object };
+        callback->Call(1, argv);
+    }
+
+private:
+    bool localOnly;
+    SANE_Status status;
+    const SANE_Device** deviceList;
 };
 
-void GetDevicesAsyncWork (uv_work_t* req) {
-	GetDevicesBaton* baton = static_cast<GetDevicesBaton*> (req->data);
-	baton->status = sane_get_devices (&baton->device_list, baton->local_only);
+NAN_METHOD(GetDevices) {
+    Nan::HandleScope scope;
+
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("There should be exactly 2 arguments");
+    }
+
+    if (!info[0]->IsBoolean()) {
+        return Nan::ThrowTypeError("First argument must be a boolean");
+    }
+
+    if (!info[1]->IsFunction()) {
+        return Nan::ThrowTypeError("Second argument must be a callback function");
+    }
+
+    bool localOnly = Nan::To<Boolean>(info[0]).ToLocalChecked()->Value();
+    Nan::Callback* callback = new Nan::Callback(info[1].As<Function>());
+    Nan::AsyncQueueWorker(new GetDevicesWorker(callback, localOnly));
 }
 
-void GetDevicesAsyncAfter (uv_work_t* req) {
-	HandleScope scope;
-	GetDevicesBaton* baton = static_cast<GetDevicesBaton*> (req->data);
+NAN_METHOD(GetDevicesSync) {
+    Nan::HandleScope scope;
 
-	Local<ObjectTemplate>  result = ObjectTemplate::New ();
-	Local<Object> object = result->NewInstance ();
-	object->Set (String::New ("status"), Integer::New (baton->status));
-	
-	if (baton->status == SANE_STATUS_GOOD) {
-		Local<Array> device_list = Array::New ();
-		for (int i = 0; baton->device_list[i]; i++) {
-			device_list->Set (i, SaneDevice::New (baton->device_list[i]));
-		}
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("There should be exactly 1 argument");
+    }
 
-		object->Set (String::New ("device_list"), device_list);
-	}
+    if (!info[0]->IsBoolean()) {
+        return Nan::ThrowTypeError("First argument must be a boolean");
+    }
 
-	Handle<Value> argv[] = { object };
-	baton->callback->Call (Context::GetCurrent ()->Global (),
-		1, argv);
+    bool localOnly = Nan::To<Boolean>(info[0]).ToLocalChecked()->Value();
+    
+    const SANE_Device** deviceList;
+    SANE_Status status;
+    status = sane_get_devices(&deviceList, localOnly);
 
-	baton->callback.Dispose ();
-	delete baton;
+    Local<ObjectTemplate> result = Nan::New<ObjectTemplate>();
+    Local<Object> object = result->NewInstance();
+    object->Set(Nan::New("status").ToLocalChecked(), Nan::New(status));
+
+    if (status == SANE_STATUS_GOOD) {
+        Local<Array> deviceListArr = Nan::New<Array>();
+        for (int i = 0; deviceList[i]; i++) {
+            Local<FunctionTemplate> deviceTpl = Nan::New(SaneDevice::constructor_template);
+            Local<Function> deviceFunc = deviceTpl->GetFunction();
+            Handle<Value> deviceFuncArgs[] = { Nan::New<External>(const_cast<SANE_Device*>(deviceList[i])) };
+            Local<Value> deviceObj = deviceFunc->NewInstance(1, deviceFuncArgs);
+            deviceListArr->Set(i, deviceObj);
+        }
+        object->Set(Nan::New("deviceList").ToLocalChecked(), deviceListArr);
+    }
+
+    info.GetReturnValue().Set(object);
 }
 
-Handle<Value>
-GetDevices (const Arguments& args) {
-	HandleScope scope;
+class OpenWorker : public Nan::AsyncWorker {
+public:
+    OpenWorker(Nan::Callback* callback, SANE_String_Const name) :
+        Nan::AsyncWorker(callback), name(name) {};
+    ~OpenWorker() {};
 
-	if (args.Length () < 2) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 2 arguments")));
-	}
+    void Execute() {
+        status = sane_open(name, &handle);
+    }
 
-	if (!args[0]->IsBoolean ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a boolean")));
-	}
+    void HandleOKCallback() {
+        Nan::HandleScope scope;
 
-	if (!args[1]->IsFunction ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a callback function")));
-	}
+        Local<ObjectTemplate> result = Nan::New<ObjectTemplate>();
+        Local<Object> object = result->NewInstance();
+        object->Set(Nan::New("status").ToLocalChecked(), Nan::New(status));
+        if (status == SANE_STATUS_GOOD) {
+            Local<FunctionTemplate> handleTpl = Nan::New(SaneHandle::constructor_template);
+            Local<Function> handleFunc = handleTpl->GetFunction();
+            Handle<Value> handleFuncArgs[] = { Nan::New<External>(handle) };
+            Local<Value> handleObj = handleFunc->NewInstance(1, handleFuncArgs);
+            object->Set(Nan::New("handle").ToLocalChecked(), handleObj);
+        }
 
-	Local<Boolean> local_only = args[0]->ToBoolean ();
-	Local<Function> callback = Local<Function>::Cast (args[1]);
+        Local<Value> argv[] = { object };
+        callback->Call(1, argv);
+    }
 
-	GetDevicesBaton* baton = new GetDevicesBaton ();
-	baton->request.data = baton;
-	baton->callback = Persistent<Function>::New (callback);
-	baton->local_only = local_only->Value ();
-
-	uv_queue_work (uv_default_loop (), &baton->request,
-		GetDevicesAsyncWork, (uv_after_work_cb) GetDevicesAsyncAfter);
-
-	return scope.Close (Undefined ());
-}
-
-Handle<Value>
-GetDevicesSync (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length() < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
-	}
-
-	if (!args[0]->IsBoolean ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a boolean")));
-	}
-
-	Local<Boolean> local_only = args[0]->ToBoolean ();
-
-	const SANE_Device** device_list;
-	SANE_Status status;
-	status = sane_get_devices (&device_list, local_only->Value ());
-
-	Local<ObjectTemplate> result = ObjectTemplate::New ();
-	Local<Object> object = result->NewInstance ();
-	object->Set (String::New ("status"), Integer::New (status));
-
-	if (status == SANE_STATUS_GOOD) {
-		Local<Array> device_list_arr = Array::New ();
-		for (int i = 0; device_list[i]; i++) {
-			device_list_arr->Set (i, SaneDevice::New (device_list[i]));
-		}
-
-		object->Set (String::New ("device_list"), device_list_arr);	
-	}
-
-	return scope.Close (object);
-}
-
-struct OpenBaton {
-	uv_work_t request;
-	Persistent<Function> callback;
-	SANE_String_Const name;
-
-	// Resultant data
-	SANE_Handle handle;
-	SANE_Status status;
+private:
+    SANE_String_Const name;
+    SANE_Handle handle;
+    SANE_Status status;
 };
 
-void OpenAsyncWork (uv_work_t* req) {
-	OpenBaton* baton = static_cast<OpenBaton*> (req->data);
-	baton->status = sane_open (baton->name, &baton->handle);
-	delete[] baton->name;
+NAN_METHOD(Open) {
+    Nan::HandleScope scope;
+
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("There should be exactly 2 arguments");
+    }
+
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("First argument must be a string");
+    }
+
+    if (!info[1]->IsFunction()) {
+        return Nan::ThrowTypeError("Second argument must be a callback function");
+    }
+
+    String::Utf8Value nameArg (info[0].As<String>());
+    std::string name (*nameArg);
+    Nan::Callback* callback = new Nan::Callback(info[1].As<Function>());
+    Nan::AsyncQueueWorker(new OpenWorker(callback, name.c_str()));
 }
 
-void OpenAsyncAfter (uv_work_t* req) {
-	HandleScope scope;
-	OpenBaton* baton = static_cast<OpenBaton*> (req->data);
+NAN_METHOD(OpenSync) {
+    Nan::HandleScope scope;
 
-	Local<ObjectTemplate> result = ObjectTemplate::New ();
-	Local<Object> object = result->NewInstance ();
-	object->Set (String::New ("status"), Integer::New (baton->status));
-	if (baton->status == SANE_STATUS_GOOD) {
-		object->Set (String::New ("handle"), SaneHandle::Wrap (baton->handle));
-	}
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("There should be exactly 1 argument");
+    }
 
-	Handle<Value> argv[] = { object };
-	baton->callback->Call (Context::GetCurrent ()->Global(),
-		1, argv);
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("First argument must be a string");
+    }
 
-	baton->callback.Dispose ();
-	delete[] baton;
+    String::Utf8Value nameArg (info[0].As<String>());
+    std::string name (*nameArg);
+    
+    SANE_Handle handle;
+    SANE_Status status;
+    status = sane_open(name.c_str(), &handle);
+
+    Local<ObjectTemplate> result = Nan::New<ObjectTemplate>();
+    Local<Object> object = result->NewInstance();
+    object->Set(Nan::New("status").ToLocalChecked(), Nan::New(status));
+
+    if (status == SANE_STATUS_GOOD) {
+        Local<FunctionTemplate> handleTpl = Nan::New(SaneHandle::constructor_template);
+        Local<Function> handleFunc = handleTpl->GetFunction();
+        Handle<Value> handleFuncArgs[] = { Nan::New<External>(handle) };
+        Local<Value> handleObj = handleFunc->NewInstance(1, handleFuncArgs);
+        object->Set(Nan::New("handle").ToLocalChecked(), handleObj);
+    }
+
+    info.GetReturnValue().Set(object);
 }
 
-Handle<Value>
-Open (const Arguments& args) {
-	HandleScope scope;
+class CloseWorker : public Nan::AsyncWorker {
+public:
+    CloseWorker(Nan::Callback* callback, SANE_Handle handle) :
+        Nan::AsyncWorker(callback), handle(handle) {};
+    ~CloseWorker() {};
 
-	if (args.Length () < 2) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 2 arguments")));
-	}
+    void Execute() {
+        sane_close(&handle);
+    }
 
-	if (!args[0]->IsString ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a string")));
-	}
-
-	if (!args[1]->IsFunction ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be a callback function")));
-	}
-
-	String::AsciiValue name (args[0]->ToString ());
-	Local<Function> callback = Local<Function>::Cast (args[1]);
-	char* name_str = new char[strlen (*name)];
-	strcpy (name_str, *name);
-
-	OpenBaton* baton = new OpenBaton ();
-	baton->request.data = baton;
-	baton->callback = Persistent<Function>::New (callback);
-	baton->name = name_str;
-
-	uv_queue_work (uv_default_loop (), &baton->request,
-		OpenAsyncWork, (uv_after_work_cb) OpenAsyncAfter);
-
-	return scope.Close (Undefined ());
-}
-
-Handle<Value>
-OpenSync (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
-	}
-
-	if (!args[0]->IsString ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a string")));
-	}
-
-	String::AsciiValue name (args[0]->ToString ());
-	
-	SANE_Handle handle;
-	SANE_Status status;
-	status = sane_open (*name, &handle);
-	
-	Local<ObjectTemplate> result = ObjectTemplate::New ();
-	Local<Object> object = result->NewInstance ();
-	object->Set (String::New ("status"), Integer::New (status));
-	if (status == SANE_STATUS_GOOD) {
-		object->Set (String::New ("handle"), SaneHandle::Wrap (handle));
-	}
-
-	return scope.Close (object);
-}
-
-struct CloseBaton {
-	uv_work_t request;
-	Persistent<Function> callback;
-	SANE_Handle handle;
+    void HandleOKCallback() {
+        Nan::HandleScope scope;
+        Local<Value> argv[] = {};
+        callback->Call(0, argv);
+    }
+    
+private:
+    SANE_Handle handle;
 };
 
-void CloseAsyncWork (uv_work_t* req) {
-	CloseBaton* baton = static_cast<CloseBaton*> (req->data);
-	sane_close (baton->handle);
+NAN_METHOD(Close) {
+    Nan::HandleScope scope;
+
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("There should be exactly 2 arguments");
+    }
+
+    if (!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("First argument must be an object");
+    }
+
+    if (!info[1]->IsFunction()) {
+        return Nan::ThrowTypeError("Second argument must be a callback function");
+    }
+
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+    SANE_Handle ptr = handle->getHandle();
+
+    Nan::Callback* callback = new Nan::Callback(info[1].As<Function>());
+    Nan::AsyncQueueWorker(new CloseWorker(callback, ptr));
 }
 
-void CloseAsyncAfter (uv_work_t* req) {
-	HandleScope scope;
-	CloseBaton* baton = static_cast<CloseBaton*> (req->data);
+NAN_METHOD(CloseSync) {
+    Nan::HandleScope scope;
 
-	Handle<Value> argv[] = { };
-	baton->callback->Call (Context::GetCurrent ()->Global(),
-		0, argv);
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("There should be exactly 1 argument");
+    }
 
-	baton->callback.Dispose ();
-	delete[] baton;
+    if (!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("First argument must be an object");
+    }
+
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+    SANE_Handle ptr = handle->getHandle();
+
+    sane_close(ptr);
+    info.GetReturnValue().Set(Nan::Undefined());
 }
 
-Handle<Value>
-Close (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(GetOptionDescriptor) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 2) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 2 arguments")));
+	if (info.Length() < 2) {
+		return Nan::ThrowTypeError("There should be exactly 2 arguments");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("First argument must be an object");
 	}
 
-	if (!args[1]->IsFunction ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be a callback function")));
+	if (!info[1]->IsInt32()) {
+        return Nan::ThrowTypeError("Second argument must be an integer");
 	}
 
-	Local<Object> handle = args[0]->ToObject ();
-	Local<Function> callback = Local<Function>::Cast (args[1]);
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-
-	CloseBaton* baton = new CloseBaton ();
-	baton->request.data = baton;
-	baton->callback = Persistent<Function>::New (callback);
-	baton->handle = ptr;
-
-	uv_queue_work (uv_default_loop (), &baton->request,
-		CloseAsyncWork, (uv_after_work_cb) CloseAsyncAfter);
-
-	return scope.Close (Undefined ());
-}
-
-Handle<Value>
-CloseSync (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
-	}
-
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
-	}
-
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+	Local<Integer> n = info[1].As<Integer>();
 	
-	sane_close (ptr);
-	return scope.Close (Undefined ());
-}
-
-Handle<Value>
-GetOptionDescriptor (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 2) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 2 arguments")));
-	}
-
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
-	}
-
-	if (!args[1]->IsInt32 ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be an integer")));
-	}
-
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-	Local<Integer> n = args[1]->ToInteger ();
-	
-	const SANE_Option_Descriptor * option = sane_get_option_descriptor (
-		ptr, n->Value ());
+	const SANE_Option_Descriptor* option = sane_get_option_descriptor(
+		handle->getHandle(), n->Value());
 	if (option == NULL) {
-		return scope.Close (Undefined ());
+        return info.GetReturnValue().Set(Nan::Undefined());
 	}
-	
-	return scope.Close (SaneOptionDescriptor::New (option));
+
+    Local<FunctionTemplate> descriptorTpl = Nan::New(SaneOptionDescriptor::constructor_template);
+    Local<Function> descriptorFunc = descriptorTpl->GetFunction();
+    Handle<Value> descriptorFuncArgs[] = { Nan::New<External>(const_cast<SANE_Option_Descriptor*>(option)) };
+    Local<Value> descriptorObj = descriptorFunc->NewInstance(1, descriptorFuncArgs);
+    
+    info.GetReturnValue().Set(descriptorObj);
 }
 
+NAN_METHOD(ControlOption) {
+    Nan::HandleScope scope;
 
-Handle<Value>
-ControlOption (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 4) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 5 arguments")));
+	if (info.Length() < 4) {
+        return Nan::ThrowTypeError("There should be exactly 5 arguments");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("First argument must be an object");
 	}
 
-	if (!args[1]->IsInt32 ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be an integer")));
+	if (!info[1]->IsInt32()) {
+        return Nan::ThrowTypeError("Second argument must be an integer");
 	}
 
-	if (!args[2]->IsInt32 ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Third argument must be an integer")));
+	if (!info[2]->IsInt32()) {
+        return Nan::ThrowTypeError("Third argument must be an integer");
 	}
 
-	if (!Buffer::HasInstance(args[3])) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Fourth argument must be a buffer")));
+	if (!node::Buffer::HasInstance(info[3])) {
+        return Nan::ThrowTypeError("Fourth argument must be a buffer");
 	}
 
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-	Local<Integer> n = args[1]->ToInteger ();
-	Local<Integer> a = args[2]->ToInteger ();
-	char* v = Buffer::Data (args[3]->ToObject ());
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+	Local<Integer> n = info[1].As<Integer>();
+	Local<Integer> a = info[2].As<Integer>();
+	char* v = node::Buffer::Data(info[3].As<Object>());
 
 	SANE_Status status;
 	SANE_Int i;
-	status = sane_control_option (ptr, n->Value (), (SANE_Action) a->Value (), v, &i);
+	status = sane_control_option(handle->getHandle(), n->Value(), (SANE_Action) a->Value(), v, &i);
 
 	// Perform byte order conversion.
-	size_t v_words = Buffer::Length (args[3]->ToObject ()) / sizeof (uint32_t);
+	size_t v_words = node::Buffer::Length (info[3]->ToObject()) / sizeof (uint32_t);
 	for (size_t j = 0; j < v_words; j++) {
 		uint32_t* v_uint32 = (uint32_t*) v;
-		v_uint32[j] = htonl (v_uint32[j]);
+		v_uint32[j] = htonl(v_uint32[j]);
 	}
 
-	return scope.Close (Number::New (status));
+    info.GetReturnValue().Set(Nan::New(status));
 }
 
-Handle<Value>
-OptionIsActive (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(OptionIsActive) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
+	if (info.Length() < 1) {
+        return Nan::ThrowTypeError("There should be exactly 1 argument");
 	}
 
-	if (!args[0]->IsInt32 ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an integer")));
+	if (!info[0]->IsInt32()) {
+        return Nan::ThrowTypeError("First argument must be an integer");
 	}
 
-	Local<Integer> cap = args[0]->ToInteger ();
-	bool ret = SANE_OPTION_IS_ACTIVE (cap->Value ());
+	Local<Integer> cap = info[0].As<Integer>();
+	bool ret = SANE_OPTION_IS_ACTIVE(cap->Value());
 
-	return scope.Close (Boolean::New (ret));
+    info.GetReturnValue().Set(Nan::New(ret));
 }
 
-Handle<Value>
-OptionIsSettable (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(OptionIsSettable) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
+	if (info.Length() < 1) {
+	    return Nan::ThrowTypeError("There should be exactly 1 argument");
 	}
 
-	if (!args[0]->IsInt32 ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an integer")));
+	if (!info[0]->IsInt32()) {
+		return Nan::ThrowTypeError("First argument must be an integer");
 	}
 
-	Local<Integer> cap = args[0]->ToInteger ();
-	bool ret = SANE_OPTION_IS_SETTABLE (cap->Value ());
+	Local<Integer> cap = info[0].As<Integer>();
+	bool ret = SANE_OPTION_IS_SETTABLE(cap->Value());
 
-	return scope.Close (Boolean::New (ret));
+    info.GetReturnValue().Set(Nan::New(ret));
 }
 
-Handle<Value>
-GetParameters (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(GetParameters) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
+	if (info.Length() < 1) {
+		return Nan::ThrowTypeError("There should be exactly 1 argument");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("First argument must be an object");
 	}
 
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-	SANE_Parameters * parameters = new SANE_Parameters ();
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+	SANE_Parameters *parameters = new SANE_Parameters();
 
 	SANE_Status status;
-	status = sane_get_parameters (ptr, parameters);
+	status = sane_get_parameters(handle->getHandle(), parameters);
 	if (status == SANE_STATUS_GOOD) {
-		return scope.Close (SaneParameters::Wrap (parameters));
+        Local<FunctionTemplate> paramsTpl = Nan::New(SaneParameters::constructor_template);
+        Local<Function> paramsFunc = paramsTpl->GetFunction();
+        Handle<Value> paramsFuncArgs[] = { Nan::New<External>(parameters) };
+        Local<Value> paramsObj = paramsFunc->NewInstance(1, paramsFuncArgs);
+        info.GetReturnValue().Set(paramsObj);
 	} else {
-		return scope.Close (Number::New (status));
+        info.GetReturnValue().Set(Nan::New(status));
 	}
 }
 
-Handle<Value>
-Start (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(Start) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
+	if (info.Length() < 1) {
+		return Nan::ThrowTypeError("There should be exactly 1 argument");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!info[0]->IsObject()) {
+		return Nan::ThrowTypeError("First argument must be an object");
 	}
 
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
 
 	SANE_Status status;
-	status = sane_start (ptr);
-	
-	return scope.Close (Integer::New (status));
+	status = sane_start(handle->getHandle());
+
+    info.GetReturnValue().Set(Nan::New(status));
 }
 
-struct ReadBaton {
-	uv_work_t request;
-	Persistent<Function> callback;
-	SANE_Handle handle;
-	SANE_Byte* buf;
-	SANE_Int buf_len;
+class ReadWorker : public Nan::AsyncWorker {
+public:
+    ReadWorker(Nan::Callback* callback, SANE_Handle handle, SANE_Byte* buf,
+            SANE_Int bufLen) :
+        Nan::AsyncWorker(callback), handle(handle), buf(buf), bufLen(bufLen) {};
+    ~ReadWorker() {};
 
-	// Resultant data
-	SANE_Status status;
-	SANE_Int len;
+    void Execute() {
+        status = sane_read(handle, buf, bufLen, &len);
+    }
+
+    void HandleOKCallback() {
+        Nan::HandleScope scope;
+
+        Local<ObjectTemplate> result = Nan::New<ObjectTemplate>();
+        Local<Object> object = result->NewInstance();
+        object->Set(Nan::New("status").ToLocalChecked(), Nan::New(status));
+
+        if (status == SANE_STATUS_GOOD) {
+            object->Set(Nan::New("length").ToLocalChecked(), Nan::New(len));
+        }
+
+        Local<Value> argv[] = { object };
+        callback->Call(1, argv);
+    }
+
+private:
+    SANE_Handle handle;
+    SANE_Byte* buf;
+    SANE_Int bufLen;
+
+    SANE_Status status;
+    SANE_Int len;
 };
 
-void ReadAsyncWork (uv_work_t* req) {
-	ReadBaton* baton = static_cast<ReadBaton*> (req->data);
-	baton->status = sane_read (baton->handle, baton->buf, baton->buf_len,
-		&baton->len);
+NAN_METHOD(Read) {
+    Nan::HandleScope scope;
+
+	if (info.Length() < 3) {
+		return Nan::ThrowTypeError("There should be exactly 3 arguments");
+	}
+
+	if (!info[0]->IsObject()) {
+		return Nan::ThrowTypeError("First argument must be an object");
+	}
+
+	if (!node::Buffer::HasInstance(info[1])) {
+		return Nan::ThrowTypeError("Second argument must be a buffer");
+	}
+
+	if (!info[2]->IsFunction()) {
+        return Nan::ThrowTypeError("Third argument must be a callback function");
+	}
+
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+	SANE_Byte* buf = (SANE_Byte*) node::Buffer::Data(info[1].As<Object>());
+    Nan::Callback* callback = new Nan::Callback(info[2].As<Function>());
+    Nan::AsyncQueueWorker(new ReadWorker(callback, handle->getHandle(), buf, node::Buffer::Length(info[1].As<Object>())));    
 }
 
-void ReadAsyncAfter (uv_work_t* req) {
-	HandleScope scope;
-	ReadBaton* baton = static_cast<ReadBaton*> (req->data);
+NAN_METHOD(ReadSync) {
+    Nan::HandleScope scope;
 
-	Local<ObjectTemplate> result = ObjectTemplate::New ();
-	Local<Object> object = result->NewInstance ();
-	object->Set (String::New ("status"), Integer::New (baton->status));
-
-	if (baton->status == SANE_STATUS_GOOD) {
-		object->Set (String::New ("length"), Integer::New (baton->len));
+	if (info.Length() < 2) {
+		return Nan::ThrowTypeError("There should be exactly 2 arguments");
 	}
 
-	Handle<Value> argv[] = { object };
-	baton->callback->Call (Context::GetCurrent ()->Global(),
-		1, argv);
-
-	baton->callback.Dispose ();
-	delete[] baton;
-}
-
-Handle<Value>
-Read (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 3) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 3 arguments")));
+	if (!info[0]->IsObject()) {
+		return Nan::ThrowTypeError("First argument must be an object");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!node::Buffer::HasInstance(info[1])) {
+		return Nan::ThrowTypeError("Second argument must be a buffer");
 	}
 
-	if (!Buffer::HasInstance (args[1])) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be a buffer")));
-	}
-
-	if (!args[2]->IsFunction ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Third argument must be a callback function")));
-	}
-
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-	SANE_Byte* buf = (SANE_Byte*) Buffer::Data (args[1]->ToObject ());
-	Local<Function> callback = Local<Function>::Cast (args[2]);
-	
-	ReadBaton* baton = new ReadBaton ();
-	baton->request.data = baton;
-	baton->callback = Persistent<Function>::New (callback);
-	baton->handle = ptr;
-	baton->buf = buf;
-	baton->buf_len = Buffer::Length (args[1]->ToObject ());
-
-	uv_queue_work (uv_default_loop (), &baton->request,
-		ReadAsyncWork, (uv_after_work_cb) ReadAsyncAfter);
-
-	return scope.Close (Undefined ());
-}
-
-Handle<Value>
-ReadSync (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 2) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 2 arguments")));
-	}
-
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
-	}
-
-	if (!Buffer::HasInstance (args[1])) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be a buffer")));
-	}
-
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-	SANE_Byte* buf = (SANE_Byte*) Buffer::Data (args[1]->ToObject ());
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+	SANE_Byte* buf = (SANE_Byte*) node::Buffer::Data(info[1].As<Object>());
 
 	SANE_Status status;
 	SANE_Int len;
-	status = sane_read (ptr, buf, Buffer::Length (args[1]->ToObject ()),
+	status = sane_read(handle->getHandle(), buf, node::Buffer::Length(info[1].As<Object>()),
 		&len);
 
-	Local<ObjectTemplate> result = ObjectTemplate::New ();
-	Local<Object> object = result->NewInstance ();
-	object->Set (String::New ("status"), Integer::New (status));
-	object->Set (String::New ("length"), Integer::New (len));
-	return scope.Close (object);
+	Local<ObjectTemplate> result = ObjectTemplate::New();
+	Local<Object> object = result->NewInstance();
+	object->Set(Nan::New("status").ToLocalChecked(), Nan::New(status));
+	object->Set(Nan::New("length").ToLocalChecked(), Nan::New(len));
+    info.GetReturnValue().Set(object);
 }
 
-struct CancelBaton {
-	uv_work_t request;
-	Persistent<Function> callback;
-	SANE_Handle handle;
+class CancelWorker : public Nan::AsyncWorker {
+public:
+    CancelWorker(Nan::Callback *callback, SANE_Handle* handle) :
+        Nan::AsyncWorker(callback), handle(handle) {};
+    ~CancelWorker() {};
+
+    void Execute() {
+        sane_cancel(&handle);
+    }
+
+    void HandleOKCallback() {
+        Nan::HandleScope scope;
+        Local<Value> argv[] = {};
+        callback->Call(0, argv);
+    }
+
+private:
+    SANE_Handle* handle;
 };
 
-void CancelAsyncWork (uv_work_t* req) {
-	CancelBaton* baton = static_cast<CancelBaton*> (req->data);
-	sane_cancel (baton->handle);
+NAN_METHOD(Cancel) {
+    Nan::HandleScope scope;
+
+	if (info.Length() < 2) {
+		return Nan::ThrowTypeError("There should be exactly 2 arguments");
+	}
+
+	if (!info[0]->IsObject()) {
+		return Nan::ThrowTypeError("First argument must be an object");
+	}
+
+	if (!info[1]->IsFunction()) {
+		return Nan::ThrowTypeError("Second argument must be a callback function");
+	}
+
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+    Nan::Callback* callback = new Nan::Callback(info[1].As<Function>());
+    Nan::AsyncQueueWorker(new CloseWorker(callback, handle->getHandle()));
 }
 
-void CancelAsyncAfter (uv_work_t* req) {
-	HandleScope scope;
-	CancelBaton* baton = static_cast<CancelBaton*> (req->data);
+NAN_METHOD(CancelSync) {
+    Nan::HandleScope scope;
 
-	Handle<Value> argv[] = { };
-	baton->callback->Call (Context::GetCurrent ()->Global(),
-		0, argv);
+	if (info.Length() < 1) {
+		return Nan::ThrowTypeError("There should be exactly 1 argument");
+	}
 
-	baton->callback.Dispose ();
-	delete[] baton;
+	if (!info[0]->IsObject()) {
+		return Nan::ThrowTypeError("First argument must be an object");
+	}
+
+    Local<Object> handleObj = Nan::To<Object>(info[0]).ToLocalChecked();
+    SaneHandle* handle = Nan::ObjectWrap::Unwrap<SaneHandle>(handleObj);
+
+	sane_cancel(handle->getHandle());
+	info.GetReturnValue().Set(Nan::Undefined());
 }
 
-Handle<Value>
-Cancel (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(FixedToNumber) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 2) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 2 arguments")));
+	if (info.Length() < 1) {
+		return Nan::ThrowTypeError("There should be exactly 1 argument");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!info[0]->IsInt32()) {
+		return Nan::ThrowTypeError("First argument must be an integer");
 	}
 
-	if (!args[1]->IsFunction ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"Second argument must be a callback function")));
-	}
+	Local<Integer> n = info[0].As<Integer>();
+	double d = SANE_UNFIX(n->Value());
 
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
-	Local<Function> callback = Local<Function>::Cast (args[1]);
-
-	CancelBaton* baton = new CancelBaton ();
-	baton->request.data = baton;
-	baton->callback = Persistent<Function>::New (callback);
-	baton->handle = ptr;
-
-	uv_queue_work (uv_default_loop (), &baton->request,
-		CancelAsyncWork, (uv_after_work_cb) CancelAsyncAfter);
-
-	return scope.Close (Undefined ());
+    info.GetReturnValue().Set(Nan::New(d));
 }
 
-Handle<Value>
-CancelSync (const Arguments& args) {
-	HandleScope scope;
+NAN_METHOD(NumberToFixed) {
+    Nan::HandleScope scope;
 
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
+	if (info.Length() < 1) {
+		return Nan::ThrowTypeError("There should be exactly 1 argument");
 	}
 
-	if (!args[0]->IsObject ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an object")));
+	if (!info[0]->IsNumber()) {
+		return Nan::ThrowTypeError("First argument must be a number");
 	}
 
-	Local<Object> handle = args[0]->ToObject ();
-	SANE_Handle ptr = ObjectWrap::Unwrap<SANE_Handle*> (handle);
+	Local<Number> n = info[0].As<Number>();
+	int val = SANE_FIX(n->Value());
 
-	sane_cancel (ptr);
-	
-	return scope.Close (Undefined ());
+    info.GetReturnValue().Set(Nan::New(val));
 }
 
-Handle<Value>
-FixedToNumber (const Arguments& args) {
-	HandleScope scope;
+void InitAll(Handle<Object> exports) {
+    SaneParameters::Init(exports);
+    SaneHandle::Init(exports);
+    SaneDevice::Init(exports);
+    SaneOptionDescriptor::Init(exports);
 
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
-	}
-
-	if (!args[0]->IsInt32 ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be an integer")));
-	}
-
-	Local<Integer> n = args[0]->ToInteger ();
-	double d = SANE_UNFIX (n->Value ());
-
-	return scope.Close (Number::New (d));
+    Nan::SetMethod(exports, "init", Init);
+    Nan::SetMethod(exports, "exit", Exit);
+    Nan::SetMethod(exports, "getDevices", GetDevices);
+    Nan::SetMethod(exports, "getDevicesSync", GetDevicesSync);
+    Nan::SetMethod(exports, "open", Open);
+    Nan::SetMethod(exports, "openSync", OpenSync);
+    Nan::SetMethod(exports, "close", Close);
+    Nan::SetMethod(exports, "closeSync", CloseSync);
+    Nan::SetMethod(exports, "getOptionDescriptor", GetOptionDescriptor);
+    Nan::SetMethod(exports, "controlOption", ControlOption);
+    Nan::SetMethod(exports, "optionIsActive", OptionIsActive);
+    Nan::SetMethod(exports, "optionIsSettable", OptionIsSettable);
+    Nan::SetMethod(exports, "getParameters", GetParameters);
+    Nan::SetMethod(exports, "start", Start);
+    Nan::SetMethod(exports, "read", Read);
+    Nan::SetMethod(exports, "readSync", ReadSync);
+    Nan::SetMethod(exports, "cancel", Cancel);
+    Nan::SetMethod(exports, "cancelSync", CancelSync);
+    Nan::SetMethod(exports, "fixedToNumber", FixedToNumber);
+    Nan::SetMethod(exports, "numberToFixed", NumberToFixed);
 }
 
-Handle<Value>
-NumberToFixed (const Arguments& args) {
-	HandleScope scope;
-
-	if (args.Length () < 1) {
-		return ThrowException (Exception::TypeError (String::New (
-			"There should be exactly 1 argument")));
-	}
-
-	if (!args[0]->IsNumber ()) {
-		return ThrowException (Exception::TypeError (String::New (
-			"First argument must be a number")));
-	}
-
-	Local<Number> n = args[0]->ToNumber ();
-	int val = SANE_FIX (n->Value ());
-
-	return scope.Close (Integer::New (val));
-}
-
-void init (Handle<Object> target) {	
-	SaneParameters::Init (target);
-	SaneHandle::Init (target);
-
-	SetMethod (target, "init", Init);
-	SetMethod (target, "exit", Exit);
-	SetMethod (target, "getDevices", GetDevices);
-	SetMethod (target, "getDevicesSync", GetDevicesSync);
-	SetMethod (target, "open", Open);
-	SetMethod (target, "openSync", OpenSync);
-	SetMethod (target, "close", Close);
-	SetMethod (target, "closeSync", CloseSync);
-	SetMethod (target, "getOptionDescriptor", GetOptionDescriptor);
-	SetMethod (target, "controlOption", ControlOption);
-        SetMethod (target, "optionIsActive", OptionIsActive);
-        SetMethod (target, "optionIsSettable", OptionIsSettable);
-	SetMethod (target, "getParameters", GetParameters);
-	SetMethod (target, "start", Start);
-	SetMethod (target, "read", Read);
-	SetMethod (target, "readSync", ReadSync); 
-	SetMethod (target, "cancel", Cancel);
-	SetMethod (target, "cancelSync", CancelSync);
-	SetMethod (target, "fixedToNumber", FixedToNumber);
-	SetMethod (target, "numberToFixed", NumberToFixed);
-}
-
-NODE_MODULE (sane, init)
+NODE_MODULE(sane, InitAll)
 

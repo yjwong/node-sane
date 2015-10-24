@@ -1,9 +1,13 @@
 {
-  "name": "sane",
-  "version": "0.0.1",
+  "name": "node-sane",
+  "version": "0.1.0",
   "author": "Wong Yong Jie <yjwong92@gmail.com>",
   "description": "a node.js interface to SANE (Scanner Access Now Easy)",
-  "main": "./lib/sane",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "install": "node-pre-gyp install --fallback-to-build"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/yjwong/node-sane.git"
@@ -16,7 +20,24 @@
     "easy"
   ],
   "license": "MIT",
-  "engines": {
-    "node": ">=0.10"
+  "gypfile": true,
+  "bugs": {
+    "url": "https://github.com/yjwong/node-sane/issues"
+  },
+  "homepage": "https://github.com/yjwong/node-sane#readme",
+  "dependencies": {
+    "nan": "^2.1.0",
+    "node-pre-gyp": "^0.6.13"
+  },
+  "bundledDepdencies": [
+    "node-pre-gyp"
+  ],
+  "binary": {
+    "module_name": "node-sane",
+    "module_path": "./lib/binding/",
+    "host": "https://node-sane.s3-ap-southeast-1.amazonaws.com"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.2.11"
   }
 }

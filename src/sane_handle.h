@@ -3,18 +3,21 @@
 
 #include <sane/sane.h>
 #include <node.h>
+#include "nan.h"
 
-class SaneHandle : public node::ObjectWrap {
+class SaneHandle : public Nan::ObjectWrap {
 public:
-	SaneHandle () { };
-	~SaneHandle () { };
-
-	static v8::Handle<v8::Value> New (const v8::Arguments& args);
-	static void Init (v8::Handle<v8::Object> target);
-	static v8::Handle<v8::Value> Wrap (SANE_Handle handle);
+	static Nan::Persistent<v8::FunctionTemplate> constructor_template;
+	static NAN_MODULE_INIT(Init);
+    SANE_Handle getHandle();
 
 private:
-	static v8::Persistent<v8::FunctionTemplate> function_template;
+	explicit SaneHandle(SANE_Handle handle) : _handle(handle) { };
+	~SaneHandle() { };
+
+    static NAN_METHOD(New);
+
+	SANE_Handle _handle;
 };
 
 #endif /* SANE_HANDLE_H */
